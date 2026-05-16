@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Froggy Trigonometry Jump</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;900&display=swap');
+        
+        body {
+            font-family: 'Nunito', sans-serif;
+            overflow: hidden;
+            background-color: #0f172a;
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* Animations */
+        @keyframes sway { 0% { transform: rotate(-15deg); } 100% { transform: rotate(15deg); } }
+        
+        @keyframes bigRippleAnim {
+            0% { transform: translateX(-50%) scale(0); opacity: 1; border-width: 6px; }
+            100% { transform: translateX(-50%) scale(6); opacity: 0; border-width: 0px; }
+        }
+
+        /* Object Styles */
+        .leaf {
+            position: absolute;
+            width: 140px; 
+            height: 45px; 
+            background: linear-gradient(145deg, #4ade80, #15803d);
+            border-radius: 50%;
+            left: 50%;
+            transform: translateX(-50%);
+            box-shadow: inset -5px -5px 10px rgba(0,0,0,0.3), 0 5px 10px rgba(0,0,0,0.5);
+            z-index: 10;
+        }
+        
+        .frog-container {
+            position: absolute;
+            width: 75px; 
+            height: 75px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 20;
+            transition: bottom 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            margin-bottom: 22px; /* Katak duduk pas di atas daun */
+        }
+
+        .anim-jump {
+            animation: jumpArc 0.4s ease-out;
+        }
+        
+        @keyframes jumpArc {
+            0% { transform: translateX(-50%) scaleY(0.8); }
+            50% { transform: translateX(-50%) translateY(-60px) scaleY(1.1); }
+            100% { transform: translateX(-50%) scaleY(1); }
+        }
+
+        .anim-fall {
+            animation: fallDown 0.6s ease-in forwards;
+        }
+        
+        @keyframes fallDown {
+            0% { transform: translateX(-50%) translateY(0) rotate(0deg); }
+            100% { transform: translateX(-50%) translateY(300px) rotate(180deg); opacity: 0; }
+        }
+
+        .anim-scroll-down {
+            animation: scrollLeaves 0.4s ease-out;
+        }
+        @keyframes scrollLeaves {
+            0% { transform: translateX(-50%) translateY(-100px); }
+            100% { transform: translateX(-50%) translateY(0); }
+        }
+
+        /* Layout & UI */
+        .player-area {
+            position: relative;
+            background: linear-gradient(to bottom, #0ea5e9, #0284c7, #0369a1, #0c4a6e);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Mode Khusus Solo: Full layer tanpa batas */
+        .mode-solo .player-area { border: none !important; border-radius: 0 !important; }
+        .mode-solo .leaf { width: 220px; height: 70px; box-shadow: inset -5px -5px 15px rgba(0,0,0,0.4), 0 10px 20px rgba(0,0,0,0.6); }
+        .mode-solo .frog-container { width: 120px; height: 120px; margin-bottom: 35px; }
+        .mode-solo .grass-container { height: 35%; }
+        .mode-solo .grass { width: 24px; margin: 0 -5px; }
+
+        /* Mode Khusus Squad: Satu layer penuh, pembatas vertikal (kolom) */
+        .mode-squad #game-container {
+            background: linear-gradient(to bottom, #0ea5e9, #0284c7, #0369a1, #0c4a6e) !important;
+            padding: 0 !important;
+            gap: 0 !important;
+        }
+        .mode-squad .player-area {
+            background: transparent !important;
+            border: none !important;
+            border-right: 2px dashed rgba(255, 255, 255, 0.4) !important;
+            border-radius: 0 !important;
+        }
+        .mode-squad .player-area:last-child {
+            border-right: none !important;
+        }
+
+        /* Penyesuaian Skala Elemen Khusus Mode Squad (4 Jalur Vertikal) agar tidak tumpang tindih */
+        .mode-squad .leaf { width: 50px; height: 18px; }
+        .mode-squad .frog-container { width: 35px; height: 35px; margin-bottom: 8px; }
+        .mode-squad .grass { width: 5px; margin: 0 -1px; }
+        
+        /* Skala kembali agak besar jika dimainkan di Desktop/Tablet/Layar Lebar */
+        @media (min-width: 768px) {
+            .mode-squad .leaf { width: 100px; height: 35px; }
+            .mode-squad .frog-container { width: 60px; height: 60px; margin-bottom: 15px; }
+            .mode-squad .grass { width: 10px; margin: 0 -2px; }
+        }
+
+        .game-canvas { flex-grow: 1; position: relative; }
+        
+        .controls-area {
+            background: rgba(15, 23, 42, 0.9);
+            padding: 10px;
+            z-index: 30;
+            border-top: 2px solid #334155;
+        }
+
+        .ans-btn {
+            background: linear-gradient(to bottom, #f8fafc, #cbd5e1);
+            color: #0f172a;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 1.2rem;
+            box-shadow: 0 4px 0 #94a3b8;
+            transition: all 0.1s;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .ans-btn:active {
+            transform: translateY(4px);
+            box-shadow: 0 0 0 #94a3b8;
+        }
+        .ans-btn.correct { background: linear-gradient(to bottom, #4ade80, #16a34a); box-shadow: 0 4px 0 #15803d; color: white;}
+        .ans-btn.wrong { background: linear-gradient(to bottom, #f87171, #dc2626); box-shadow: 0 4px 0 #b91c1c; color: white;}
+
+        /* Efek Lingkungan */
+        .grass-container { 
+            position: absolute; bottom: 0; left: 0; width: 100%; height: 25%; 
+            pointer-events: none; z-index: 20; display: flex; justify-content: space-between; overflow: hidden; 
+        }
+        .grass { 
+            width: 12px; background: linear-gradient(to top, #064e3b, #4ade80); 
+            border-radius: 50% 50% 0 0; transform-origin: bottom center; margin: 0 -2px; 
+        }
+        .grass:nth-child(odd) { animation: sway 3s ease-in-out infinite alternate; }
+        .grass:nth-child(even) { animation: sway 4s ease-in-out infinite alternate-reverse; }
+
+        .big-ripple {
+            position: absolute; border-radius: 50%; border: 6px solid rgba(255, 255, 255, 0.7);
+            animation: bigRippleAnim 1s ease-out forwards; pointer-events: none; z-index: 15;
+            width: 100px; height: 30px; left: 50%; bottom: 15%; transform: translateX(-50%) scale(0);
+        }
+
+        .splash {
+            position: absolute; width: 6px; height: 6px; background: white; border-radius: 50%;
+            pointer-events: none; z-index: 25;
+        }
+
+        /* Timer Bar */
+        .timer-bar-container { width: 100%; height: 6px; background: #334155; }
+        .timer-bar { height: 100%; background: #fbbf24; width: 100%; transition: width 0.1s linear, background-color 0.3s; }
+        
+        .global-btn { z-index: 200; position: fixed; }
+
+        #rain-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 100; opacity: 0; transition: opacity 1s; }
+    </style>
+</head>
+<body class="text-slate-100 flex items-center justify-center h-screen w-screen relative">
+
+    <!-- Rain Overlay -->
+    <canvas id="rain-canvas"></canvas>
+
+    <!-- UI BGM & Fullscreen -->
+    <button id="btn-sound" class="global-btn top-4 left-4 bg-slate-800 p-2 rounded-full border border-slate-600 hover:bg-slate-700">🔊</button>
+    <button id="btn-fullscreen" class="global-btn top-4 right-4 bg-slate-800 p-2 rounded-full border border-slate-600 hover:bg-slate-700">⛶</button>
+    <button id="btn-exit" class="global-btn top-16 right-4 bg-red-800 p-2 rounded-full border border-red-600 hover:bg-red-700 hidden">✖</button>
+
+    <!-- Start Screen -->
+    <div id="start-screen" class="absolute inset-0 bg-slate-900 z-50 flex flex-col items-center justify-center p-4">
+        <!-- GAMBAR KATAK PADA HALAMAN AWAL -->
+        <img src="https://imgur.com/BOpI6Re.png" alt="Katak" class="w-32 h-32 md:w-48 md:h-48 mb-4 object-contain filter drop-shadow-2xl animate-bounce" style="animation-duration: 2s;">
+        
+        <h1 class="text-4xl md:text-6xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-emerald-600 mb-2 text-center drop-shadow-lg">
+            Froggy Trigonometry
+        </h1>
+        <p class="text-slate-400 mb-1 text-center font-bold tracking-wider uppercase text-sm">Karya: Clara Abellya Agustin</p>
+        <p class="text-slate-500 mb-8 text-center max-w-md mt-2">Lompati daun dengan menjawab nilai sudut Trigonometri yang benar. Awas jatuh ke rawa!</p>
+        
+        <div class="flex flex-col md:flex-row gap-4 w-full max-w-lg">
+            <button onclick="startGame(1)" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 px-6 rounded-xl border-b-4 border-blue-800 active:border-b-0 active:translate-y-1 transition-all text-xl">
+                1P Solo Mode
+            </button>
+            <button onclick="startGame(2)" class="flex-1 bg-purple-600 hover:bg-purple-500 text-white font-bold py-4 px-6 rounded-xl border-b-4 border-purple-800 active:border-b-0 active:translate-y-1 transition-all text-xl">
+                2P Duel Mode
+            </button>
+            <button onclick="startGame(4)" class="flex-1 bg-orange-600 hover:bg-orange-500 text-white font-bold py-4 px-6 rounded-xl border-b-4 border-orange-800 active:border-b-0 active:translate-y-1 transition-all text-xl">
+                4P Squad Mode
+            </button>
+        </div>
+    </div>
+
+    <!-- Game Container -->
+    <div id="game-container" class="w-full h-full hidden gap-1 md:gap-2 p-1 md:p-2 bg-slate-900">
+        <!-- Player areas injected here via JS -->
+    </div>
+
+    <script>
+        // --- Sistem Soal Trigonometri ---
+        const angles = [0, 30, 45, 60, 90];
+        const funcs = ['sin', 'cos', 'tan'];
+        
+        const trigValues = {
+            'sin': {0: '0', 30: '1/2', 45: '1/2 √2', 60: '1/2 √3', 90: '1'},
+            'cos': {0: '1', 30: '1/2 √3', 45: '1/2 √2', 60: '1/2', 90: '0'},
+            'tan': {0: '0', 30: '1/3 √3', 45: '1', 60: '√3', 90: '∞'}
+        };
+
+        const allPossibleAnswers = ['0', '1/2', '1/2 √2', '1/2 √3', '1', '1/3 √3', '√3', '∞', '-1'];
+
+        function generateQuestions() {
+            let qs = [];
+            funcs.forEach(f => {
+                angles.forEach(a => {
+                    let correctAns = trigValues[f][a];
+                    let wrongOptions = allPossibleAnswers.filter(ans => ans !== correctAns);
+                    // Shuffle & pick 3 wrong
+                    wrongOptions.sort(() => 0.5 - Math.random());
+                    let options = [correctAns, wrongOptions[0], wrongOptions[1], wrongOptions[2]];
+                    options.sort(() => 0.5 - Math.random());
+                    
+                    qs.push({
+                        q: `${f} ${a}° = ?`,
+                        correct: correctAns,
+                        options: options
+                    });
+                });
+            });
+            return qs.sort(() => 0.5 - Math.random()); // Acak seluruh soal
+        }
+
+        const questions = generateQuestions();
+
+        // Aset katak menggunakan gambar URL Imgur
+        const frogSVG = `<img src="https://imgur.com/BOpI6Re.png" alt="Katak" style="width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 10px 5px rgba(0,0,0,0.5)); transform: scale(1.2);">`;
+
+        const MAX_QUESTIONS = 15;
+        const TIME_PER_QUESTION = 5; // detik
+
+        class Player {
+            constructor(id, color) {
+                this.id = id;
+                this.color = color;
+                this.score = 0;
+                this.combo = 0;
+                this.isDead = false;
+                this.isFinished = false; // Status jika sudah menyelesaikan 15 soal
+                this.qIndex = Math.floor(Math.random() * questions.length);
+                this.questionCount = 0; // Menghitung soal yang sudah dijawab
+                this.timeLeft = 100; // Persentase timer
+                this.timerInterval = null;
+                this.container = document.createElement('div');
+                this.setupUI();
+            }
+
+            setupUI() {
+                // Layout Penyesuaian berdasarkan Mode
+                let isSquad = currentMode === 4;
+                
+                this.container.className = `player-area border-2 rounded-xl border-slate-700 flex-1 relative ${isSquad ? 'border flex' : ''}`;
+                this.container.style.borderColor = this.color.hex;
+                
+                let containerClass = isSquad ? "flex flex-col h-full" : "flex flex-col h-full";
+                let gameAreaClass = "game-canvas";
+                let controlAreaClass = "controls-area shrink-0";
+                
+                // Gunakan 1 kolom pada mobile untuk mode Squad agar teks tombol tidak terpotong
+                let gridClass = isSquad ? "grid grid-cols-1 md:grid-cols-2 gap-1 mt-1" : "grid grid-cols-2 gap-2 mt-2";
+                let scoreText = isSquad ? "text-[10px] md:text-sm" : "text-sm md:text-xl";
+                let qText = isSquad ? "text-lg md:text-3xl" : "text-3xl md:text-5xl";
+                let btnText = isSquad ? "text-[10px] md:text-base py-1 md:py-2" : "text-base md:text-xl py-3";
+                let headerPad = isSquad ? "px-1 md:px-2" : "px-4";
+
+                // Daun & Rumput
+                let leafHTML = `
+                    <div class="leaf leaf-pos" style="bottom: 15%"></div>
+                    <div class="leaf leaf-pos" style="bottom: 45%"></div>
+                    <div class="leaf leaf-pos" style="bottom: 75%"></div>
+                    <div class="leaf leaf-pos" style="bottom: 105%"></div>
+                `;
+
+                let grassHTML = `
+                    <div class="grass-container">
+                        <div class="flex items-end h-full w-24">
+                            <div class="grass" style="height: 80%"></div>
+                            <div class="grass" style="height: 100%"></div>
+                            <div class="grass" style="height: 65%"></div>
+                            <div class="grass" style="height: 90%"></div>
+                        </div>
+                        <div class="flex items-end h-full w-24 justify-end">
+                            <div class="grass" style="height: 70%"></div>
+                            <div class="grass" style="height: 95%"></div>
+                            <div class="grass" style="height: 85%"></div>
+                            <div class="grass" style="height: 60%"></div>
+                        </div>
+                    </div>
+                `;
+
+                this.container.innerHTML = `
+                    <div class="h-8 md:h-12 bg-slate-800 flex justify-between items-center ${headerPad} border-b border-slate-700 shrink-0">
+                        <div class="font-bold truncate max-w-[40%] text-[10px] md:text-base" style="color: ${this.color.hex}">${this.color.name}</div>
+                        <div class="flex gap-1 md:gap-4 shrink-0">
+                            <div class="text-slate-300 font-bold text-[10px] md:text-base"><span id="q-count-${this.id}">0</span>/${MAX_QUESTIONS}</div>
+                            <div class="text-orange-400 font-bold hidden lg:block text-[10px] md:text-base">Combo x<span id="combo-${this.id}">0</span></div>
+                            <div class="text-white font-bold ${scoreText}">Score: <span id="score-${this.id}">0</span></div>
+                        </div>
+                    </div>
+                    
+                    <div class="timer-bar-container shrink-0">
+                        <div id="timer-${this.id}" class="timer-bar"></div>
+                    </div>
+
+                    <div class="${containerClass}">
+                        <div id="game-area-${this.id}" class="${gameAreaClass}">
+                            ${grassHTML}
+                            ${leafHTML}
+                            <div id="frog-${this.id}" class="frog-container" style="bottom: 15%;">${frogSVG}</div>
+                        </div>
+                        
+                        <div class="${controlAreaClass}">
+                            <div class="text-center font-bold text-slate-300 ${qText} mb-1" id="question-${this.id}">sin 30° = ?</div>
+                            <div class="${gridClass}" id="options-${this.id}">
+                                <button class="ans-btn ${btnText}"></button>
+                                <button class="ans-btn ${btnText}"></button>
+                                <button class="ans-btn ${btnText}"></button>
+                                <button class="ans-btn ${btnText}"></button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="overlay-${this.id}" class="absolute inset-0 bg-slate-900/80 flex flex-col items-center justify-center z-50 hidden">
+                        <div class="text-red-500 font-bold text-4xl md:text-6xl mb-2">GAME OVER</div>
+                        <div class="text-white text-xl">Score: <span id="final-score-${this.id}">0</span></div>
+                        ${currentMode === 1 ? `<button onclick="resetGame()" class="mt-4 bg-blue-600 px-6 py-2 rounded-lg font-bold text-white hover:bg-blue-500">Main Lagi</button>` : ''}
+                    </div>
+                `;
+
+                // Event Listeners for buttons
+                const btns = this.container.querySelectorAll('.ans-btn');
+                btns.forEach((btn, index) => {
+                    btn.addEventListener('pointerdown', (e) => {
+                        e.preventDefault(); // Mencegah double tap zoom di mobile
+                        this.checkAnswer(index);
+                    });
+                });
+            }
+
+            startTimer() {
+                clearInterval(this.timerInterval);
+                this.timeLeft = 100;
+                this.updateTimerUI();
+                
+                // Konversi 5 detik ke interval 50ms: (5 detik * 1000) / 50ms = 100 langkah
+                // Penurunan persentase per 50ms = 100% / 100 langkah = 1%
+                const decreaseRate = 1; 
+
+                this.timerInterval = setInterval(() => {
+                    if (this.isDead || this.isFinished) return clearInterval(this.timerInterval);
+                    this.timeLeft -= decreaseRate;
+                    this.updateTimerUI();
+                    
+                    if (this.timeLeft <= 0) {
+                        this.die(); // Waktu habis, mati
+                    }
+                }, 50);
+            }
+
+            updateTimerUI() {
+                const bar = document.getElementById(`timer-${this.id}`);
+                bar.style.width = `${Math.max(0, this.timeLeft)}%`;
+                if(this.timeLeft < 25) bar.style.backgroundColor = '#ef4444'; // Red
+                else if(this.timeLeft < 50) bar.style.backgroundColor = '#f97316'; // Orange
+                else bar.style.backgroundColor = '#fbbf24'; // Yellow
+            }
+
+            nextQuestion() {
+                if (this.questionCount >= MAX_QUESTIONS) {
+                    this.finish();
+                    return;
+                }
+
+                this.questionCount++;
+                document.getElementById(`q-count-${this.id}`).innerText = this.questionCount;
+
+                this.qIndex = (this.qIndex + 1) % questions.length;
+                const q = questions[this.qIndex];
+                
+                document.getElementById(`question-${this.id}`).innerText = q.q;
+                const btns = this.container.querySelectorAll('.ans-btn');
+                
+                btns.forEach((btn, i) => {
+                    btn.innerText = q.options[i];
+                    btn.className = `ans-btn ${currentMode === 4 ? "text-[10px] md:text-base py-1 md:py-2" : "text-base md:text-xl py-3"}`; // reset style
+                });
+            }
+
+            checkAnswer(selectedIndex) {
+                if(this.isDead) return;
+                
+                const q = questions[this.qIndex];
+                const btns = this.container.querySelectorAll('.ans-btn');
+                const selectedBtn = btns[selectedIndex];
+
+                if (q.options[selectedIndex] === q.correct) {
+                    // Benar
+                    playSound('jump');
+                    selectedBtn.classList.add('correct');
+                    this.combo++;
+                    this.score += 10 * this.combo;
+                    
+                    // Menonaktifkan tombol sementara animasi berjalan
+                    btns.forEach(b => b.style.pointerEvents = 'none');
+                    
+                    document.getElementById(`score-${this.id}`).innerText = this.score;
+                    document.getElementById(`combo-${this.id}`).innerText = this.combo;
+                    
+                    clearInterval(this.timerInterval); // Hentikan timer saat animasi
+                    this.animateJump();
+                } else {
+                    // Salah
+                    selectedBtn.classList.add('wrong');
+                    this.die();
+                }
+            }
+
+            animateJump() {
+                const frog = document.getElementById(`frog-${this.id}`);
+                frog.classList.remove('anim-jump');
+                void frog.offsetWidth; // trigger reflow
+                frog.classList.add('anim-jump');
+
+                // Scroll daun ke bawah untuk efek tak terbatas
+                const leaves = this.container.querySelectorAll('.leaf-pos');
+                leaves.forEach(leaf => {
+                    leaf.classList.remove('anim-scroll-down');
+                    void leaf.offsetWidth;
+                    leaf.classList.add('anim-scroll-down');
+                });
+
+                setTimeout(() => {
+                    const btns = this.container.querySelectorAll('.ans-btn');
+                    btns.forEach(b => b.style.pointerEvents = 'auto'); // Aktifkan kembali tombol
+                    this.nextQuestion();
+                    if(!this.isFinished) this.startTimer(); // Mulai ulang timer untuk soal baru (5 detik)
+                }, 300);
+            }
+
+            createSplashParticles() {
+                const area = document.getElementById(`game-area-${this.id}`);
+                for(let i=0; i<8; i++) {
+                    const drop = document.createElement('div');
+                    drop.className = 'splash';
+                    drop.style.left = `calc(50% + ${(Math.random()-0.5)*40}px)`;
+                    drop.style.bottom = `15%`;
+                    area.appendChild(drop);
+
+                    const angle = (Math.random() - 0.5) * Math.PI;
+                    const velocity = 30 + Math.random() * 30;
+                    
+                    let dx = Math.sin(angle) * velocity;
+                    let dy = Math.cos(angle) * velocity;
+                    let y = 15;
+                    let x = 0;
+                    
+                    let frame = 0;
+                    const anim = setInterval(() => {
+                        frame++;
+                        y += (dy/10) - (frame*0.5); // gravity
+                        x += (dx/10);
+                        
+                        drop.style.transform = `translate(${x}px, -${y}px)`;
+                        
+                        if(frame > 20) {
+                            clearInterval(anim);
+                            drop.remove();
+                        }
+                    }, 20);
+                }
+            }
+
+            die() {
+                if(this.isDead) return;
+                this.isDead = true;
+                this.combo = 0;
+                clearInterval(this.timerInterval);
+                playSound('fall');
+                
+                const frog = document.getElementById(`frog-${this.id}`);
+                frog.classList.add('anim-fall');
+                
+                // Splash Effect & Ripple
+                setTimeout(() => {
+                    this.createSplashParticles();
+
+                    // Efek gelombang air menyebar saat kecebur (Lebih bergelombang beruntun)
+                    const area = document.getElementById(`game-area-${this.id}`);
+                    for(let i=0; i<3; i++) {
+                        setTimeout(() => {
+                            if(area) {
+                                const wave = document.createElement('div');
+                                wave.className = 'big-ripple';
+                                area.appendChild(wave);
+                                setTimeout(() => wave.remove(), 1000);
+                            }
+                        }, i * 250); // Jeda tiap gelombang 250ms
+                    }
+
+                    // Global rain effect increase
+                    rainIntensity = Math.min(1, rainIntensity + 0.5);
+                    canvas.style.opacity = 1;
+                }, 400);
+
+                setTimeout(() => {
+                    const overlayTitle = document.getElementById(`overlay-${this.id}`).querySelector('.text-red-500');
+                    overlayTitle.innerText = "GAME OVER";
+                    overlayTitle.className = "text-red-500 font-bold text-4xl md:text-6xl mb-2";
+                    document.getElementById(`final-score-${this.id}`).innerText = this.score;
+                    document.getElementById(`overlay-${this.id}`).classList.remove('hidden');
+                    checkGlobalGameOver();
+                }, 1000);
+            }
+
+            finish() {
+                if(this.isFinished || this.isDead) return;
+                this.isFinished = true;
+                clearInterval(this.timerInterval);
+                
+                // Tampilkan overlay WIN
+                const overlay = document.getElementById(`overlay-${this.id}`);
+                const overlayTitle = overlay.querySelector('.text-red-500');
+                overlayTitle.innerText = "FINISH!";
+                overlayTitle.className = "text-green-400 font-bold text-4xl md:text-6xl mb-2 drop-shadow-[0_0_10px_rgba(74,222,128,0.8)]";
+                document.getElementById(`final-score-${this.id}`).innerText = this.score;
+                overlay.classList.remove('hidden');
+                
+                checkGlobalGameOver();
+            }
+
+            reset() {
+                this.isDead = false;
+                this.isFinished = false;
+                this.score = 0;
+                this.combo = 0;
+                this.questionCount = 0;
+                this.qIndex = Math.floor(Math.random() * questions.length);
+                
+                document.getElementById(`score-${this.id}`).innerText = this.score;
+                document.getElementById(`combo-${this.id}`).innerText = this.combo;
+                document.getElementById(`q-count-${this.id}`).innerText = this.questionCount;
+                document.getElementById(`overlay-${this.id}`).classList.add('hidden');
+                
+                const frog = document.getElementById(`frog-${this.id}`);
+                frog.classList.remove('anim-fall', 'anim-jump');
+                
+                const area = document.getElementById(`game-area-${this.id}`);
+                const oldLeaves = area.querySelectorAll('.leaf-pos');
+                oldLeaves.forEach(l => l.remove());
+
+                let leafHTML = `
+                    <div class="leaf leaf-pos" style="bottom: 15%"></div>
+                    <div class="leaf leaf-pos" style="bottom: 45%"></div>
+                    <div class="leaf leaf-pos" style="bottom: 75%"></div>
+                    <div class="leaf leaf-pos" style="bottom: 105%"></div>
+                `;
+                area.insertAdjacentHTML('afterbegin', leafHTML);
+                
+                // Reduce global rain
+                if (currentMode === 1) {
+                    rainIntensity = 0.6;
+                    canvas.style.opacity = 1;
+                } else {
+                    rainIntensity = Math.max(0, rainIntensity - 0.5);
+                    if(rainIntensity === 0) canvas.style.opacity = 0;
+                }
+
+                this.nextQuestion();
+                this.startTimer();
+            }
+        }
+
+        // --- Audio System (Web Audio API - Sintetis, Tanpa Aset Luar) ---
+        let audioCtx;
+        let isMuted = false;
+
+        function initAudio() {
+            if(!audioCtx) {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                audioCtx = new AudioContext();
+                startBGM();
+            }
+        }
+
+        function playSound(type) {
+            if(isMuted || !audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            if(type === 'jump') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(400, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(800, audioCtx.currentTime + 0.1);
+                gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.2);
+            } 
+            else if(type === 'fall') {
+                // Splash sound (noise) + falling tone
+                const noiseSize = audioCtx.sampleRate * 0.5; 
+                const buffer = audioCtx.createBuffer(1, noiseSize, audioCtx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < noiseSize; i++) data[i] = Math.random() * 2 - 1;
+                
+                const noise = audioCtx.createBufferSource();
+                noise.buffer = buffer;
+                const noiseFilter = audioCtx.createBiquadFilter();
+                noiseFilter.type = 'lowpass';
+                noiseFilter.frequency.value = 1000;
+                const noiseGain = audioCtx.createGain();
+                noiseGain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+                noiseGain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+                
+                noise.connect(noiseFilter).connect(noiseGain).connect(audioCtx.destination);
+                noise.start(audioCtx.currentTime + 0.2); // splash telat dikit
+
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(300, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + 0.4);
+                gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.4);
+            }
+        }
+
+        function startBGM() {
+            // Simple generative BGM
+            setInterval(() => {
+                if(isMuted || !audioCtx || document.getElementById('start-screen').style.display !== 'none') return;
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                
+                const notes = [261.63, 329.63, 392.00, 523.25]; // C major chord
+                osc.frequency.value = notes[Math.floor(Math.random() * notes.length)] / 2;
+                osc.type = 'triangle';
+                
+                gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.5);
+                
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.5);
+            }, 500);
+        }
+
+        document.getElementById('btn-sound').addEventListener('click', () => {
+            isMuted = !isMuted;
+            document.getElementById('btn-sound').innerText = isMuted ? '🔇' : '🔊';
+        });
+
+        // --- Rain Animation System ---
+        const canvas = document.getElementById('rain-canvas');
+        const ctx = canvas.getContext('2d');
+        let rainIntensity = 0; // 0 = cerah, 1 = deras
+        let raindrops = [];
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        function createRain() {
+            if(rainIntensity > 0 && Math.random() < rainIntensity * 0.5) {
+                raindrops.push({
+                    x: Math.random() * canvas.width,
+                    y: -10,
+                    l: 10 + Math.random() * 20,
+                    v: 15 + Math.random() * 15
+                });
+            }
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.strokeStyle = `rgba(148, 163, 184, ${rainIntensity * 0.5})`;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            
+            for(let i=raindrops.length-1; i>=0; i--) {
+                let r = raindrops[i];
+                ctx.moveTo(r.x, r.y);
+                ctx.lineTo(r.x - r.l*0.2, r.y + r.l);
+                r.y += r.v;
+                r.x -= r.v*0.2; // Angin miring
+                if(r.y > canvas.height) raindrops.splice(i, 1);
+            }
+            ctx.stroke();
+            requestAnimationFrame(createRain);
+        }
+        createRain();
+
+        // --- Game Management ---
+        const colors = [
+            {hex: '#3b82f6', name: 'Biru'}, // P1
+            {hex: '#a855f7', name: 'Ungu'}, // P2
+            {hex: '#ef4444', name: 'Merah'}, // P3
+            {hex: '#eab308', name: 'Kuning'} // P4
+        ];
+        
+        let pManagers = [];
+        let currentMode = 1;
+
+        function startGame(mode) {
+            initAudio();
+            document.getElementById('start-screen').style.display = 'none';
+            const cont = document.getElementById('game-container');
+            cont.classList.remove('hidden');
+            cont.classList.add('flex');
+            
+            document.getElementById('btn-exit').classList.remove('hidden');
+            cont.innerHTML = '';
+            pManagers = [];
+            currentMode = mode;
+            
+            // Mode Solo otomatis selalu gerimis sejak awal
+            if (mode === 1) {
+                rainIntensity = 0.6; // Rintik hujan lebih deras agar terlihat
+                canvas.style.opacity = 1;
+            } else {
+                rainIntensity = 0;
+                canvas.style.opacity = 0;
+            }
+
+            // Atur layout pembagian Flexbox berdasarkan mode
+            let paddingClass = mode === 1 ? 'p-0' : 'p-1 md:p-2';
+            let layoutClass = mode === 4 ? 'flex-row gap-0' : mode === 2 ? 'flex-col md:flex-row gap-2' : 'flex-col gap-0';
+            cont.className = `w-full h-full ${paddingClass} bg-slate-900 flex ${layoutClass}`;
+
+            if(mode === 1) document.body.classList.add('mode-solo');
+            else document.body.classList.remove('mode-solo');
+
+            if(mode === 4) document.body.classList.add('mode-squad');
+            else document.body.classList.remove('mode-squad');
+
+            for (let i = 0; i < mode; i++) {
+                const pDiv = document.createElement('div');
+                // Pembagian layar responsive (Fleksibel)
+                pDiv.className = mode === 4 ? 'w-1/4 h-full flex flex-col' : 'flex-1 h-full flex flex-col';
+                cont.appendChild(pDiv);
+
+                const player = new Player(i+1, colors[i]);
+                pDiv.appendChild(player.container);
+                pManagers.push(player);
+                
+                // Mulai
+                player.nextQuestion();
+                player.startTimer();
+            }
+        }
+
+        function checkGlobalGameOver() {
+            // Cek apakah semua pemain sudah selesai (entah mati atau finish 15 soal)
+            if (pManagers.every(p => p.isDead || p.isFinished)) {
+                // Semua selesai, tunjukkan tombol reset di layar salah satu atau global
+                if(currentMode !== 1) {
+                    // Cari pemenang: yang tidak mati, atau jika semua mati/finish, skor tertinggi
+                    let validPlayers = pManagers;
+                    // Jika ada yang finish, prioritaskan yang finish
+                    const finishedPlayers = pManagers.filter(p => p.isFinished);
+                    if(finishedPlayers.length > 0) {
+                        validPlayers = finishedPlayers;
+                    }
+
+                    const winner = [...validPlayers].sort((a,b) => b.score - a.score)[0];
+                    let winText = `Pemenang: Katak ${winner.color.name} (Score: ${winner.score})`;
+                    
+                    // Jika draw (skor sama dan status sama)
+                    const topScore = winner.score;
+                    const topScorers = validPlayers.filter(p => p.score === topScore);
+                    if(topScorers.length > 1) {
+                        winText = `SERI! Skor Tertinggi: ${topScore}`;
+                    }
+
+                    const globalOverlay = document.createElement('div');
+                    globalOverlay.className = 'fixed inset-0 bg-black/90 z-[100] flex flex-col items-center justify-center text-white';
+                    globalOverlay.innerHTML = `
+                        <h1 class="text-4xl md:text-6xl font-bold mb-4 text-orange-400">MATCH OVER</h1>
+                        <p class="text-2xl mb-8 text-center">${winText}</p>
+                        <div class="flex gap-4">
+                            <button onclick="resetGame()" class="bg-blue-600 px-6 py-3 rounded-xl font-bold hover:bg-blue-500 text-xl">Main Ulang</button>
+                            <button onclick="exitGame()" class="bg-slate-700 px-6 py-3 rounded-xl font-bold hover:bg-slate-600 text-xl">Menu Utama</button>
+                        </div>
+                    `;
+                    document.body.appendChild(globalOverlay);
+                    globalOverlay.id = 'global-gameover';
+                } else {
+                    // Solo Mode: Modifikasi overlay agar menyesuaikan jika Menang (Finish 15 soal)
+                    if(pManagers[0].isFinished) {
+                        const overlay = document.getElementById(`overlay-${pManagers[0].id}`);
+                        // Pastikan tombol main lagi ada jika mode solo
+                         if(!overlay.querySelector('button')) {
+                            overlay.innerHTML += `<button onclick="resetGame()" class="mt-4 bg-blue-600 px-6 py-2 rounded-lg font-bold text-white hover:bg-blue-500">Main Lagi</button>`;
+                         }
+                    }
+                }
+            }
+        }
+
+        window.resetGame = function() {
+            const glo = document.getElementById('global-gameover');
+            if(glo) glo.remove();
+            pManagers.forEach(p => p.reset());
+        }
+
+        window.exitGame = function() {
+            const glo = document.getElementById('global-gameover');
+            if(glo) glo.remove();
+            pManagers.forEach(p => {
+                p.isDead = true;
+                clearInterval(p.timerInterval);
+            });
+            document.getElementById('game-container').classList.add('hidden');
+            document.getElementById('game-container').classList.remove('flex');
+            document.getElementById('start-screen').style.display = 'flex';
+            document.getElementById('btn-exit').classList.add('hidden');
+            document.body.classList.remove('mode-solo');
+            document.body.classList.remove('mode-squad');
+            canvas.style.opacity = 0;
+            rainIntensity = 0;
+        }
+
+        document.getElementById('btn-exit').addEventListener('click', exitGame);
+
+        // Fullscreen API
+        document.getElementById('btn-fullscreen').addEventListener('click', () => {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    console.log(`Error: ${err.message}`);
+                });
+            } else {
+                document.exitFullscreen();
+            }
+        });
+    </script>
+</body>
+</html>
